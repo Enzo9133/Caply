@@ -343,7 +343,7 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;bac
 <div class="overlay" id="overlay" hidden>
   <form class="sheet" id="form" role="dialog" aria-modal="true" aria-labelledby="form-title" novalidate>
     <div class="sheet-head">
-      <h2 id="form-title">Ajouter une ligne</h2>
+      <h2 id="form-title">Ajouter une action</h2>
       <button type="button" class="icon-btn" id="close" aria-label="Fermer">×</button>
     </div>
     <div class="grid2">
@@ -408,7 +408,7 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;bac
       <h2 id="share-title">Prévenir tes amis</h2>
       <button type="button" class="icon-btn" id="share-close" aria-label="Fermer">×</button>
     </div>
-    <p class="hint">Ligne enregistrée. Appuie sur Partager et choisis ton groupe WhatsApp. Tu peux modifier le message avant.</p>
+    <p class="hint">Action enregistrée. Appuie sur Partager et choisis ton groupe WhatsApp. Tu peux modifier le message avant.</p>
     <div class="field">
       <label for="share-text">Message</label>
       <textarea id="share-text" rows="4"></textarea>
@@ -934,7 +934,7 @@ function renderList(){
   var items=state.items.filter(matchesFilter).sort(byRecent);
   if(!items.length){
     var msg;
-    if(state.items.length)msg="Aucune ligne de ce type.";
+    if(state.items.length)msg="Aucune action de ce type.";
     else if(adminView())msg="Aucun achat pour l'instant. Ajoute le premier avec le bouton « Ajouter ».";
     else msg="Aucun achat publié pour l'instant. Reviens bientôt.";
     list.appendChild(h("div",{class:"empty",text:msg}));
@@ -1158,7 +1158,7 @@ function fillForm(it){
 }
 function openForm(it,btn){
   editing=it||null;opener=btn||null;delArmed=false;
-  $("form-title").textContent=it?"Modifier la ligne":"Ajouter une ligne";
+  $("form-title").textContent=it?"Modifier l'action":"Ajouter une action";
   fillForm(it);
   var del=$("delete");
   del.hidden=!it;del.textContent="Supprimer";
@@ -1245,10 +1245,13 @@ function save(keepOpen){
 /* ---------- message à envoyer aux amis ---------- */
 
 function smsText(list){
-  var who=list.map(function(d){return d.name+(d.ticker?" ("+d.ticker+")":"");}).join(", ");
-  var isin=list.length===1&&list[0].isin?", ISIN "+list[0].isin:"";
-  var lead=list.length>1?"Nouveaux achats sur Caply : ":"Nouvel achat sur Caply : ";
-  return lead+who+isin+". Détails : "+SITE_URL;
+  var what;
+  if(list.length>1)what="De nouvelles actions viennent d'être ajoutées.";
+  else if(list[0].type==="action")what="Une nouvelle action vient d'être ajoutée.";
+  else if(list[0].type==="etf")what="Un nouvel ETF vient d'être ajouté.";
+  else what="Un nouvel investissement vient d'être ajouté.";
+  var names=list.map(function(d){return "• "+d.name;}).join("\n");
+  return "✨ Du nouveau sur Caply !\n"+what+" Va vite découvrir ça ! 🚀\n"+names+"\n"+SITE_URL;
 }
 function updateShareCount(){
   var n=$("share-text").value.length;
