@@ -33,3 +33,4 @@ Accès libre : tes amis ouvrent le lien, sans inscription ni compte. Seul toi as
 - Les achats sont publics : toute personne qui a le lien voit les valeurs et les ISIN. La page demande aux moteurs de recherche de ne pas l'indexer (`noindex`), mais ce n'est pas une protection.
 - Pas de statistiques ni de Oui/Non dans cette version.
 - Pour changer le mot de passe : modifie `ADMIN_PASSWORD` dans Vercel, puis redéploie.
+

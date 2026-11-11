@@ -118,6 +118,16 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .risk.faible{color:var(--buy);background:var(--buy-bg)}
 .risk.modere{color:var(--watch);background:var(--watch-bg)}
 .risk.eleve{color:var(--danger);background:rgba(255,107,129,.12)}
+.swipe-wrap{position:relative;overflow:hidden}
+.swipe-wrap + .swipe-wrap{border-top:1px solid var(--line)}
+.swipe-wrap .row + .row{border-top:0}
+.swipe-del{position:absolute;top:0;right:0;bottom:0;width:96px;border:0;background:var(--danger);color:#1c0610;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
+.swipe-del[disabled]{opacity:.6;cursor:default}
+.swipe-wrap:not(.swiped) .swipe-del{visibility:hidden}
+.swipe-row{position:relative;touch-action:pan-y;will-change:transform}
+.swipe-row{-webkit-user-select:none;user-select:none}
+.swipe-row .isin{-webkit-user-select:text;user-select:text}
+.swipe-wrap.swiped .swipe-row{background:#0c1325}
 .note{grid-column:1 / -1;margin:0;color:var(--ink);opacity:.85;font-size:14px;max-width:65ch;white-space:pre-wrap;overflow-wrap:anywhere}
 .empty,.notice{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:28px 16px;color:var(--muted);text-align:center}
 .notice{border-style:solid;text-align:left}
@@ -398,7 +408,7 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;bac
       <h2 id="share-title">Prévenir tes amis</h2>
       <button type="button" class="icon-btn" id="share-close" aria-label="Fermer">×</button>
     </div>
-    <p class="hint">Ligne enregistrée. Copie ce message et envoie-le par SMS ou dans votre groupe. Tu peux le modifier avant.</p>
+    <p class="hint">Ligne enregistrée. Appuie sur Partager et choisis ton groupe WhatsApp. Tu peux modifier le message avant.</p>
     <div class="field">
       <label for="share-text">Message</label>
       <textarea id="share-text" rows="4"></textarea>
@@ -407,8 +417,10 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;bac
     <div class="sheet-actions">
       <span class="spacer"></span>
       <button type="button" class="btn" id="share-skip">Plus tard</button>
-      <a class="btn" id="share-sms" href="sms:?&amp;body=">Ouvrir dans Messages</a>
-      <button type="button" class="btn primary" id="share-copy">Copier le message</button>
+      <button type="button" class="btn primary" id="share-native" hidden>Partager</button>
+      <a class="btn" id="share-wa" href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+      <a class="btn" id="share-sms" href="sms:?&amp;body=">SMS</a>
+      <button type="button" class="btn" id="share-copy">Copier</button>
     </div>
   </div>
 </div>
@@ -426,7 +438,7 @@ var TYPES={action:"Action",etf:"ETF",obligation:"Obligation",crypto:"Crypto",aut
 var FILTERS=[["tous","Tous"],["action","Actions"],["etf","ETF"],["autres","Autres"]];
 var state={items:[],tab:"invite",manage:false,filter:"tous",admin:false,loaded:false,slow:false,noDb:false,db:null,
   user:null,uid:null,canVote:true,readOnly:false,writing:false,votes:{},mine:{},names:{}};
-var editing=null, opener=null, delArmed=false, saving=false;
+var editing=null, opener=null, delArmed=false, saving=false, added=[];
 
 function $(id){return document.getElementById(id);}
 function h(tag,attrs){
@@ -849,6 +861,62 @@ function renderLexique(){
   });
 }
 
+/* Glisser une ligne vers la gauche fait apparaître « Supprimer » (propriétaire). */
+var openSwipe=null;
+document.addEventListener("pointerdown",function(e){
+  if(openSwipe&&!e.target.closest(".swipe-wrap"))openSwipe();
+});
+function swipeRow(it){
+  var W=96,x=0,startX=0,startY=0,base=0,down=false,decided=false,horiz=false,dragged=false;
+  var wrap=h("div",{class:"swipe-wrap"});
+  var del=h("button",{class:"swipe-del",type:"button","aria-label":"Supprimer "+(it.name||""),text:"Supprimer"});
+  var r=row(it);
+  r.classList.add("swipe-row");
+  wrap.appendChild(del);wrap.appendChild(r);
+  function setX(v,anim){
+    x=v;
+    r.style.transition=anim?"transform .2s ease":"none";
+    r.style.transform=v?"translateX("+v+"px)":"";
+    wrap.classList.toggle("swiped",v<0);
+  }
+  function close(){setX(0,true);if(openSwipe===close)openSwipe=null;}
+  r.addEventListener("pointerdown",function(e){
+    if(e.target.closest("input"))return;
+    if(openSwipe&&openSwipe!==close)openSwipe();
+    startX=e.clientX;startY=e.clientY;base=x;down=true;decided=false;horiz=false;dragged=false;
+  });
+  r.addEventListener("pointermove",function(e){
+    if(!down)return;
+    var dx=e.clientX-startX,dy=e.clientY-startY;
+    if(!decided){
+      if(Math.abs(dx)<6&&Math.abs(dy)<6)return;
+      decided=true;horiz=Math.abs(dx)>Math.abs(dy);
+      if(horiz){dragged=true;try{r.setPointerCapture(e.pointerId);}catch(err){}}
+    }
+    if(!horiz)return;
+    setX(Math.max(-W,Math.min(0,base+dx)),false);
+  });
+  function end(){
+    if(!down)return;
+    down=false;
+    if(!horiz)return;
+    if(x<-W/2){setX(-W,true);openSwipe=close;}else close();
+  }
+  r.addEventListener("click",function(e){if(dragged){e.preventDefault();e.stopPropagation();}},true);
+  r.addEventListener("pointerup",end);
+  r.addEventListener("pointercancel",end);
+  del.addEventListener("click",function(){
+    del.disabled=true;del.textContent="…";
+    api("DELETE","/api/positions?id="+encodeURIComponent(it.id)).then(function(){
+      openSwipe=null;return loadItems();
+    },function(err){
+      del.disabled=false;del.textContent="Supprimer";
+      if(err&&err.auth){logout();openLogin();}
+    });
+  });
+  return wrap;
+}
+
 function renderList(){
   var list=$("list");
   list.textContent="";
@@ -884,7 +952,7 @@ function renderList(){
     var sum=n+(n>1?" achats":" achat")+(total>0?" · "+eur.format(total):"");
     var sec=h("section",{class:"month"},
       h("div",{class:"month-head"},h("h2",{text:monthLabel(g.key)})));
-    g.rows.forEach(function(it){sec.appendChild(row(it));});
+    g.rows.forEach(function(it){sec.appendChild(adminView()?swipeRow(it):row(it));});
     list.appendChild(sec);
   });
 }
@@ -1104,6 +1172,7 @@ function openForm(it,btn){
 function closeForm(){
   $("overlay").hidden=true;
   document.body.classList.remove("lock");
+  if(added.length){var a=added;added=[];openShare(a);return;}
   if(opener&&opener.isConnected)opener.focus();
 }
 function setBusy(b){
@@ -1160,42 +1229,52 @@ function save(keepOpen){
       $("f-name").value="";$("f-ticker").value="";$("f-isin").value="";$("f-price").value="";$("f-div").value="";divAuto=false;setConf(null);setRisk(null);updateDivHint();
       closeSuggest();
       updateIsinHint();
+      added.push(data);
       var s=$("form-status");s.textContent="« "+data.name+" » ajouté.";s.hidden=false;
       $("f-name").focus();
     }else{
+      if(!editing)added.push(data);
       closeForm();
-      if(!editing)openShare(data);
     }
   },function(err){
     setBusy(false);
-    if(err&&err.auth){logout();closeForm();openLogin();return;}
+    if(err&&err.auth){added=[];logout();closeForm();openLogin();return;}
     showError("L'enregistrement a échoué. Vérifie ta connexion et réessaie.");
   });
 }
 /* ---------- message à envoyer aux amis ---------- */
-function smsText(d){
-  var who=d.name+(d.ticker?" ("+d.ticker+")":"");
-  var isin=d.isin?", ISIN "+d.isin:"";
-  var lead="Nouvel achat sur Caply : ";
+
+function smsText(list){
+  var who=list.map(function(d){return d.name+(d.ticker?" ("+d.ticker+")":"");}).join(", ");
+  var isin=list.length===1&&list[0].isin?", ISIN "+list[0].isin:"";
+  var lead=list.length>1?"Nouveaux achats sur Caply : ":"Nouvel achat sur Caply : ";
   return lead+who+isin+". Détails : "+SITE_URL;
 }
 function updateShareCount(){
   var n=$("share-text").value.length;
   $("share-count").textContent=n+" caractères"+(n>160?" : le SMS sera découpé en plusieurs parties.":".");
-  $("share-sms").setAttribute("href","sms:?&body="+encodeURIComponent($("share-text").value));
+  var enc=encodeURIComponent($("share-text").value);
+  $("share-sms").setAttribute("href","sms:?&body="+enc);
+  $("share-wa").setAttribute("href","https://wa.me/?text="+enc);
 }
 function openShare(d){
   $("share-text").value=smsText(d);
-  $("share-copy").textContent="Copier le message";
+  $("share-copy").textContent="Copier";
   updateShareCount();
   $("share-overlay").hidden=false;
   document.body.classList.add("lock");
-  setTimeout(function(){$("share-copy").focus();},0);
+  setTimeout(function(){($("share-native").hidden?$("share-wa"):$("share-native")).focus();},0);
 }
 function closeShare(){
   $("share-overlay").hidden=true;
   document.body.classList.remove("lock");
   if(opener&&opener.isConnected)opener.focus();
+}
+if(navigator.share){
+  $("share-native").hidden=false;
+  $("share-native").addEventListener("click",function(){
+    try{navigator.share({text:$("share-text").value});}catch(e){}
+  });
 }
 $("share-text").addEventListener("input",updateShareCount);
 $("share-close").addEventListener("click",closeShare);
